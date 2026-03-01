@@ -6,6 +6,11 @@ import ConfirmDialog from '@/components/ConfirmDialog';
 const PEOPLE_IDS = ["Mamu", "Son", "Naani", "Saani"] as const;
 type Person = typeof PEOPLE_IDS[number];
 
+interface TimeWindow {
+  start: number;
+  end: number;
+}
+
 export default function Scheduler() {
   const [activeUser, setActiveUser] = useState<Person | null>(null);
   const [data, setData] = useState<any>({});
@@ -52,8 +57,8 @@ export default function Scheduler() {
 
   const calculateOverlap = () => {
     const minMs = 45 * 60000;
-    
-    const allNormalized = PEOPLE_IDS.map(p => {
+
+    const allNormalized: TimeWindow[][] = PEOPLE_IDS.map(p => {
       const uData = getUserData(p);
       return uData.availabilities.map((slot: any) => {
         const dateStr = `${slot.date}T${slot.start}:00`;
@@ -65,7 +70,10 @@ export default function Scheduler() {
         const eLoc = new Date(e.toLocaleString('en-US', { timeZone: uData.timezone }));
         const eDiff = eLoc.getTime() - e.getTime();
 
-        return { start: s.getTime() - sDiff, end: e.getTime() - eDiff };
+        return { 
+          start: s.getTime() - sDiff, 
+          end: e.getTime() - eDiff 
+        };
       });
     });
 
@@ -74,14 +82,17 @@ export default function Scheduler() {
       return;
     }
 
-    let finalWindows = allNormalized[0];
+    let finalWindows: TimeWindow[] = allNormalized[0];
+
     for (let i = 1; i < allNormalized.length; i++) {
-      let nextRound: any[] = [];
-      finalWindows.forEach(existing => {
-        allNormalized[i].forEach(current => {
+      let nextRound: TimeWindow[] = [];
+      finalWindows.forEach((existing: TimeWindow) => {
+        allNormalized[i].forEach((current: TimeWindow) => {
           const start = Math.max(existing.start, current.start);
           const end = Math.min(existing.end, current.end);
-          if (end - start >= minMs) nextRound.push({ start, end });
+          if (end - start >= minMs) {
+            nextRound.push({ start, end });
+          }
         });
       });
       finalWindows = nextRound;
