@@ -121,7 +121,7 @@ export default function Scheduler() {
       {!activeUser ? (
         <>
           <h1 className="main-title">VidChat Time-Finder</h1>
-          <p className="main-subtitle">Click your row, input times, return with '← Back To Overview', and then .. huzzah - find the time!"</p>
+          <p className="main-subtitle">Click your row, input times, return with '← Back To Overview', and then .. huzzah - find the time!</p>
           
           {PEOPLE_IDS.map(p => (
             <div key={p} className="user-row" onClick={() => setActiveUser(p)}>
