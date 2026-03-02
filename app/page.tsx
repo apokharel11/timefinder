@@ -143,7 +143,7 @@ export default function Scheduler() {
           
           {PEOPLE_IDS.map(p => (
             <div key={p} className="user-row" onClick={() => setActiveUser(p)}>
-              <span className="user-name">User {p}</span>
+              <span className="user-name">{p}</span>
               <span className={`slot-badge ${getUserData(p).availabilities.length ? 'active' : ''}`}>
                 {getUserData(p).availabilities.length} Slots
               </span>
@@ -183,7 +183,7 @@ export default function Scheduler() {
       ) : (
         <>
           <button className="btn-ghost" onClick={() => setActiveUser(null)}>← Back to Overview</button>
-          <h2 className="main-title">User {activeUser}</h2>
+          <h2 className="main-title">{activeUser}'s Times</h2>
           
           <div className="editor-card">
             <div>
