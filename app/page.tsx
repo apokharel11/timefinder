@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import Alert from '../components/Alert';
 import ConfirmDialog from '@/components/ConfirmDialog';
 
-const PEOPLE_IDS = ["A", "B", "C", "D"] as const;
+const PEOPLE_IDS = ["Mamu", "Son", "Saani", "Naani"] as const;
 type Person = typeof PEOPLE_IDS[number];
 
 interface TimeWindow {
@@ -139,7 +139,7 @@ export default function Scheduler() {
       {!activeUser ? (
         <>
           <h1 className="main-title">VidChat Time-Finder</h1>
-          <p className="main-subtitle">Add your times, then hit overlap. Everyone sees the same data!</p>
+          <p className="main-subtitle">{'Select your row, input times, return with "← Back to Overview", then ... huzzah find the time!'}</p>
           
           {PEOPLE_IDS.map(p => (
             <div key={p} className="user-row" onClick={() => setActiveUser(p)}>
@@ -178,7 +178,7 @@ export default function Scheduler() {
             );
           })}
 
-          <button className="btn-nuke" onClick={handleNukeClick}>Delete All Cloud Data</button>
+          <button className="btn-nuke" onClick={handleNukeClick}>Delete All Data</button>
         </>
       ) : (
         <>
