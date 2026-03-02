@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import Alert from '../components/Alert';
 import ConfirmDialog from '@/components/ConfirmDialog';
 
-const PEOPLE_IDS = ["Mamu", "Son", "Naani", "Saani"] as const;
+const PEOPLE_IDS = ["A", "B", "C", "D"] as const;
 type Person = typeof PEOPLE_IDS[number];
 
 interface TimeWindow {
@@ -17,47 +17,71 @@ export default function Scheduler() {
   const [alertMsg, setAlertMsg] = useState("");
   const [results, setResults] = useState<any[]>([]);
   const [showNukeConfirm, setShowNukeConfirm] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [draft, setDraft] = useState({ 
     date: new Date().toISOString().split('T')[0], start: "09:00", end: "10:00" 
   });
 
-  // Hydration
+  // Hydration from Cloud
   useEffect(() => {
-    const saved = localStorage.getItem('shazam_sync_v1');
-    let parsed = saved ? JSON.parse(saved) : {};
-    PEOPLE_IDS.forEach(p => {
-      if (!parsed[p]) parsed[p] = { timezone: "America/New_York", availabilities: [] };
-    });
-    setData(parsed);
+    const loadData = async () => {
+      setIsSyncing(true);
+      try {
+        const res = await fetch('/api/sync');
+        const parsed = await res.json();
+        
+        // Self-healing: Ensure all IDs exist
+        const checkedData = { ...parsed };
+        PEOPLE_IDS.forEach(p => {
+          if (!checkedData[p]) {
+            checkedData[p] = { timezone: "America/New_York", availabilities: [] };
+          }
+        });
+        setData(checkedData);
+      } catch (e) {
+        setAlertMsg("Cloud sync failed. Check connection.");
+      } finally {
+        setIsSyncing(false);
+      }
+    };
+    loadData();
   }, []);
 
-  // HASH CHECK: If data changes, clear stale results immediately
   useEffect(() => {
     setResults([]);
   }, [JSON.stringify(data)]);
 
-  const persist = (newData: any) => {
-    setData(newData);
-    localStorage.setItem('shazam_sync_v1', JSON.stringify(newData));
+  // Persist to Cloud
+  const persist = async (newData: any) => {
+    setData(newData); // Optimistic Update
+    setIsSyncing(true);
+    try {
+      await fetch('/api/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newData),
+      });
+    } catch (e) {
+      setAlertMsg("Cloud save failed!");
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
-  // This just triggers the UI
   const handleNukeClick = () => setShowNukeConfirm(true);
 
-  // This is the actual execution
-  const executeNuke = () => {
+  const executeNuke = async () => {
     const reset = PEOPLE_IDS.reduce((acc, p) => ({ 
       ...acc, [p]: { timezone: "America/New_York", availabilities: [] } 
     }), {});
-    persist(reset);
+    await persist(reset);
     setResults([]);
-    setShowNukeConfirm(false); // Close modal
-    setAlertMsg("All data cleared.");
+    setShowNukeConfirm(false);
+    setAlertMsg("Cloud data cleared.");
   };
 
   const calculateOverlap = () => {
     const minMs = 45 * 60000;
-
     const allNormalized: TimeWindow[][] = PEOPLE_IDS.map(p => {
       const uData = getUserData(p);
       return uData.availabilities.map((slot: any) => {
@@ -65,15 +89,10 @@ export default function Scheduler() {
         const s = new Date(dateStr);
         const sLoc = new Date(s.toLocaleString('en-US', { timeZone: uData.timezone }));
         const sDiff = sLoc.getTime() - s.getTime();
-        
         const e = new Date(`${slot.date}T${slot.end}:00`);
         const eLoc = new Date(e.toLocaleString('en-US', { timeZone: uData.timezone }));
         const eDiff = eLoc.getTime() - e.getTime();
-
-        return { 
-          start: s.getTime() - sDiff, 
-          end: e.getTime() - eDiff 
-        };
+        return { start: s.getTime() - sDiff, end: e.getTime() - eDiff };
       });
     });
 
@@ -83,24 +102,19 @@ export default function Scheduler() {
     }
 
     let finalWindows: TimeWindow[] = allNormalized[0];
-
     for (let i = 1; i < allNormalized.length; i++) {
       let nextRound: TimeWindow[] = [];
       finalWindows.forEach((existing: TimeWindow) => {
         allNormalized[i].forEach((current: TimeWindow) => {
           const start = Math.max(existing.start, current.start);
           const end = Math.min(existing.end, current.end);
-          if (end - start >= minMs) {
-            nextRound.push({ start, end });
-          }
+          if (end - start >= minMs) nextRound.push({ start, end });
         });
       });
       finalWindows = nextRound;
     }
 
-    if (finalWindows.length === 0) {
-      setAlertMsg("No 4-way overlap found.");
-    }
+    if (finalWindows.length === 0) setAlertMsg("No 4-way overlap found.");
     setResults(finalWindows);
   };
 
@@ -109,11 +123,15 @@ export default function Scheduler() {
   return (
     <main className="app-container">
       <Alert message={alertMsg} onClose={() => setAlertMsg("")} />
+      
+      {isSyncing && (
+        <div className="sync-status">Cloud Syncing...</div>
+      )}
 
       <ConfirmDialog 
         isOpen={showNukeConfirm}
         title="Reset All Data?"
-        message="This will permanently delete all saved availability slots for every user. You cannot undo this."
+        message="This will permanently delete all cloud-saved slots. You cannot undo this."
         onConfirm={executeNuke}
         onCancel={() => setShowNukeConfirm(false)}
       />
@@ -121,11 +139,11 @@ export default function Scheduler() {
       {!activeUser ? (
         <>
           <h1 className="main-title">VidChat Time-Finder</h1>
-          <p className="main-subtitle">Click your row, input times, return with '← Back To Overview', and then .. huzzah - find the time!</p>
+          <p className="main-subtitle">Add your times, then hit overlap. Everyone sees the same data!</p>
           
           {PEOPLE_IDS.map(p => (
             <div key={p} className="user-row" onClick={() => setActiveUser(p)}>
-              <span className="user-name">{p}</span>
+              <span className="user-name">User {p}</span>
               <span className={`slot-badge ${getUserData(p).availabilities.length ? 'active' : ''}`}>
                 {getUserData(p).availabilities.length} Slots
               </span>
@@ -160,7 +178,7 @@ export default function Scheduler() {
             );
           })}
 
-          <button className="btn-nuke" onClick={handleNukeClick}>Delete All Saved Data</button>
+          <button className="btn-nuke" onClick={handleNukeClick}>Delete All Cloud Data</button>
         </>
       ) : (
         <>
