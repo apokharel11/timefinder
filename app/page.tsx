@@ -269,7 +269,7 @@ export default function Scheduler() {
             const startObj = new Date(`${slot.date}T${slot.start}`);
             const endObj = new Date(`${slot.date}T${slot.end}`);
             const normalized = normalizeToUTC(slot, getUserData(activeUser).timezone);
-            const isPast = normalized.start < now;
+            const isPast = normalized.end < now;
             return (
               <div key={slot.id} className="user-row-v2 compact">
                 <div className="row-content">
