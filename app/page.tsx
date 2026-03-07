@@ -122,16 +122,27 @@ export default function Scheduler() {
 
   const suggestions = useMemo(() => {
     if (!activeUser) return [];
+    
     const others = PEOPLE_IDS.filter(p => p !== activeUser);
     const otherSlots = others.map(p => ({
         p, slots: getUserData(p).availabilities.map((s: any) => normalizeToUTC(s, getUserData(p).timezone))
     }));
+    
+    // Get active user's current slots to avoid suggesting times they're already busy
+    const mySlots = getUserData(activeUser).availabilities.map((s: any) => normalizeToUTC(s, getUserData(activeUser).timezone));
+
     const checkpoints = Array.from(new Set(otherSlots.flatMap(u => u.slots.flatMap(s => [s.start, s.end])))).sort();
     let options: TimeWindow[] = [];
+
     for (let i = 0; i < checkpoints.length - 1; i++) {
         const start = checkpoints[i];
         const end = checkpoints[i+1];
         if (start < now) continue;
+
+        // Don't suggest times the user already has marked as free
+        const iAmBusy = mySlots.some(s => s.start <= start && s.end >= end);
+        if (iAmBusy) continue;
+
         const matchCount = otherSlots.filter(u => u.slots.some(s => s.start <= start && s.end >= end)).length;
         if (matchCount > 0) options.push({ start, end, count: matchCount });
     }
@@ -286,18 +297,30 @@ export default function Scheduler() {
                 <p style={{fontSize:'0.8rem', color:'#888', marginBottom:'15px'}}>Based on other people's free slots:</p>
                 <div className="suggestion-list">
                   {suggestions.length > 0 ? suggestions.map((s, i) => {
+                    const userTz = getUserData(activeUser!).timezone;
+                    const tzLabel = userTz === 'America/New_York' ? 'VA' : userTz === 'America/Chicago' ? 'TX' : 'WA';
                     const d = new Date(s.start);
+
                     return (
                         <div key={i} className="suggestion-item">
                             <div className="sug-info">
                               <div style={{display:'flex', gap:'5px', alignItems:'baseline'}}>
-                                <span className="sug-date">{d.toLocaleDateString([], {month: 'short', day: 'numeric'})}</span>
-                                <span className="sug-time">@ {formatTime(d)}</span>
+                                <span className="sug-date">{d.toLocaleDateString([], {month: 'short', day: 'numeric', timeZone: userTz})}</span>
+                                <span className="sug-time">@ {formatTime(d, userTz)} ({tzLabel})</span>
                               </div>
                               <span className="sug-count">{s.count} others free</span>
                             </div>
                             <button className="btn-primary-sm" onClick={() => {
-                                 setDraft({ date: d.toISOString().split('T')[0], start: d.toTimeString().slice(0,5), end: new Date(s.start + 3600000).toTimeString().slice(0,5) });
+                                 const locStr = d.toLocaleString('sv-SE', { timeZone: userTz }); 
+                                 const [locDate, locTime] = locStr.split(' ');
+                                 const endD = new Date(s.start + 3600000);
+                                 const locEndTime = endD.toLocaleString('sv-SE', { timeZone: userTz }).split(' ')[1];
+
+                                 setDraft({ 
+                                    date: locDate, 
+                                    start: locTime.slice(0,5), 
+                                    end: locEndTime.slice(0,5) 
+                                 });
                                  setShowSmartModal(false);
                             }}>Select</button>
                         </div>
